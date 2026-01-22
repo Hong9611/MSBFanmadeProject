@@ -282,7 +282,7 @@ public class LockArea : MonoBehaviour, IEventObject
 
         yield return new WaitForSeconds(1f);
 
-        customer.SetCustomerDestination(CustomerLineManager.Instance.endPoint);
+        customer.SetCustomerDestination(CustomerLineManager.Instance.EndPoint.position);
         trash.SetActive(true);
         bread.SetActive(false);
 

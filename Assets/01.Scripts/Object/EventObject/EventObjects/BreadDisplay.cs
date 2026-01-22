@@ -20,13 +20,6 @@ public class BreadDisplay : MonoBehaviour, IEventObject
 
     private List<GameObject> displayBreads = new List<GameObject>();
 
-    private Vector3[] customerPoints = new Vector3[]
-    {
-        new Vector3(0f, 0f, 1.2f),
-        new Vector3(1.5f, 0f, 0f),
-        new Vector3(0f, 0f, -1.2f),
-    };
-
     private List<Customer> occupyingCustomers = new List<Customer>();
 
     private void Awake()
@@ -64,9 +57,9 @@ public class BreadDisplay : MonoBehaviour, IEventObject
 
     public Vector3? GetAvailablePoint(Customer newCustomer = null)
     {
-        foreach (var localPos in customerPoints)
+        foreach (var localPos in CustomerLineManager.Instance.m_WaitPoints)
         {
-            Vector3 worldPos = transform.TransformPoint(localPos);
+            Vector3 worldPos = transform.TransformPoint(localPos.position);
             if (!NavMesh.SamplePosition(worldPos, out NavMeshHit hit, 1.0f, NavMesh.AllAreas))
                 continue;
 

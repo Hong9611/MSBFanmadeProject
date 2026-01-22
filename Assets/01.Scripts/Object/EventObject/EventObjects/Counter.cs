@@ -22,7 +22,7 @@ public class Counter : MonoBehaviour, IEventObject
 
         if (Unit.CompareTag("Player"))
         {
-            Customer firstCustomer = cusMana.GetFirstCustomer(cusMana.firstLine);
+            Customer firstCustomer = cusMana.GetFirstCustomer(cusMana.FirstLinePoint);
 
             if (firstCustomer == null) return;
 
@@ -47,14 +47,14 @@ public class Counter : MonoBehaviour, IEventObject
                 yield return null;
                 continue;
             }
-            if (!(manager.LineQuDic[manager.firstLine].Count > 0))
+            if (!(manager.LineQueues[manager.FirstLinePoint].Count > 0))
             {
                 yield return null;
                 continue;
             }
             if (customer == null)
             {
-                customer = manager.GetFirstCustomer(manager.firstLine);
+                customer = manager.GetFirstCustomer(manager.FirstLinePoint);
                 if (customer == null)
                 {
                     yield return null;
@@ -94,8 +94,8 @@ public class Counter : MonoBehaviour, IEventObject
                 customer.paperBack.SetActive(true);
                 customer.Anim.SetBool("Stack", true);
 
-                manager.RemoveCustomerInQueue(manager.firstLine, customer);
-                manager.Enqueue(manager.endPoint, customer);
+                manager.RemoveCustomerInQueue(manager.FirstLinePoint, customer);
+                manager.Enqueue(manager.EndPoint, customer);
                 customer = null;
                 if (GameManager.Instance.firstCal)
                 {
@@ -103,7 +103,7 @@ public class Counter : MonoBehaviour, IEventObject
                     GameManager.Instance.firstCal = false;
                 }
 
-                if (manager.LineQuDic[manager.firstLine].Count > 0)
+                if (manager.LineQueues[manager.FirstLinePoint].Count > 0)
                 {
                     customer = null;
                 }

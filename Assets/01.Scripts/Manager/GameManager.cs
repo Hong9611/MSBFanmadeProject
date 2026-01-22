@@ -72,14 +72,8 @@ public class GameManager : Singleton<GameManager>
         var cuLineMana = CustomerLineManager.Instance;
         var objPool = ObjectPoolManager.Instance;
 
+        // Customer 풀 찾기
         Pool pool = null;
-        var coordinate = new List<Vector3>
-        {
-            new Vector3(-6.5f,0.5f,-3.8f),
-            new Vector3(-5.0f,0.5f,-5f),
-            new Vector3(-6.5f,0.5f,-6.2f)
-        };
-
         for (int i = 0; i < objPool.pools.Count; i++)
         {
             if (objPool.pools[i].tag == "Customer")
@@ -89,21 +83,35 @@ public class GameManager : Singleton<GameManager>
             }
         }
 
+        // 풀 한계 체크(기존 로직 유지)
         if (pool != null && pool.initialSize <= customerNum)
-        {
             return;
+
+        Vector3 lookAt = Vector3.zero;
+        if (breadDisplays != null && breadDisplays.Count > 0)
+        {
+            lookAt = breadDisplays[0].gameObject.transform.position;
         }
 
-        for (int i = 0; i < cuLineMana.canWait.Count; i++)
+        // 하이라키에 등록된 waitPoint 기반으로 빈 슬롯 찾기
+        for (int i = 0; i < cuLineMana.m_WaitPoints.Count; i++)
         {
-            if (cuLineMana.canWait[coordinate[i]] == null)
-            {
-                var c = objPool.SpawnFromPool("Customer", cuLineMana.endPoint, Quaternion.Euler(0, 90, 0));
-                customerNum++;
-                cuLineMana.canWait[coordinate[i]] = c;
-                cuLineMana.Enqueue(coordinate[i], c.GetComponent<Customer>(), new Vector3(-6.5f, 0.5f, -5f));
-                break;
-            }
+            var waitPos = cuLineMana.m_WaitPoints[i];
+
+            // 안전장치: CanWait에 키가 없다면(초기화 누락/런타임 변경 등) 등록
+            if (!cuLineMana.CanWait.ContainsKey(waitPos))
+                cuLineMana.CanWait[waitPos] = null;
+
+            if (cuLineMana.CanWait[waitPos] != null)
+                continue;
+
+            // 스폰 (EndLine 명칭은 현재 프로젝트에 맞게 유지)
+            var go = objPool.SpawnFromPool("Customer", cuLineMana.EndPoint.position, Quaternion.Euler(0, 90, 0));
+            customerNum++;
+
+            cuLineMana.CanWait[waitPos] = go;
+            cuLineMana.Enqueue(waitPos, go.GetComponent<Customer>(), lookAt);
+            break;
         }
     }
 

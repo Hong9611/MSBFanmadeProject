@@ -4,153 +4,203 @@ using UnityEngine;
 
 public class CustomerLineManager : Singleton<CustomerLineManager>
 {
-    public Dictionary<Vector3, Queue<Customer>> LineQuDic => lineQuDic;
-    public Vector3 firstLine => startPoint[0];
-    public Vector3 secondLine => startPoint[1];
-    public Vector3 endPoint => startPoint[2];
+    public List<Transform> m_StartPoints = new(3);
+    public List<Transform> m_WaitPoints = new(3);
 
-    private Dictionary<Vector3, Queue<Customer>> lineQuDic = new Dictionary<Vector3, Queue<Customer>>();
-    private Vector3[] startPoint = new Vector3[]
-    {
-        new Vector3(-1.65f, 0.5f, 0.25f),
-        new Vector3(-1.65f, 0.5f, 2.75f),
-        new Vector3(-9.5f, 0.5f, 0)
-    };
+    public Transform FirstLinePoint => m_StartPoints[0];
+    public Transform SecondLinePoint => m_StartPoints[1];
+    public Transform EndPoint => m_StartPoints[2];
 
-    public Dictionary<Vector3, GameObject> canWait = new Dictionary<Vector3, GameObject>()
-    {
-        {new Vector3(-6.5f,0.5f,-3.8f), null },
-        {new Vector3(-5.0f,0.5f,-5f), null },
-        {new Vector3(-6.5f,0.5f,-6.2f), null }
-    };
+    private Dictionary<Transform, Queue<Customer>> m_LineQueues = new();
+    private Dictionary<Transform, GameObject> m_CanWait = new();
+
+    public Dictionary<Transform, Queue<Customer>> LineQueues => m_LineQueues;
+    public Dictionary<Transform, GameObject> CanWait => m_CanWait;
 
     private void Awake()
     {
-        lineQuDic.Clear();
-        for (int i = 0; i < startPoint.Length; i++)
+        if (!ValidatePoints())
         {
-            lineQuDic.Add(startPoint[i], new Queue<Customer>());
+            enabled = false;
+            return;
         }
+
+        m_LineQueues.Clear();
+        for (int i = 0; i < m_StartPoints.Count; i++)
+        {
+            Transform point = m_StartPoints[i];
+            m_LineQueues[point] = new Queue<Customer>();
+        }
+
+        m_CanWait.Clear();
+        for (int i = 0; i < m_WaitPoints.Count; i++)
+        {
+            Transform point = m_WaitPoints[i];
+            m_CanWait[point] = null;
+        }
+    }
+
+    private bool ValidatePoints()
+    {
+        if (m_StartPoints == null || m_StartPoints.Count < 3)
+        {
+            Debug.LogError($"{nameof(CustomerLineManager)}: StartPoints가 3개 미만입니다.");
+            return false;
+        }
+
+        for (int i = 0; i < m_StartPoints.Count; i++)
+        {
+            if (m_StartPoints[i] == null)
+            {
+                Debug.LogError($"{nameof(CustomerLineManager)}: StartPoints[{i}]가 비어 있습니다.");
+                return false;
+            }
+        }
+
+        if (m_WaitPoints == null)
+        {
+            Debug.LogError($"{nameof(CustomerLineManager)}: WaitPoints가 null입니다.");
+            return false;
+        }
+
+        for (int i = 0; i < m_WaitPoints.Count; i++)
+        {
+            if (m_WaitPoints[i] == null)
+            {
+                Debug.LogError($"{nameof(CustomerLineManager)}: WaitPoints[{i}]가 비어 있습니다.");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void Update()
     {
-        if (lineQuDic.TryGetValue(secondLine, out Queue<Customer> que))
+        if (!m_LineQueues.TryGetValue(SecondLinePoint, out Queue<Customer> queue))
+            return;
+
+        var game = GameManager.Instance;
+
+        if (queue.Count <= 0)
+            return;
+
+        if (!game.areaOpenBool.TryGetValue("Floor_Lock", out bool open) || !open)
+            return;
+
+        var lockArea = game.LockAreas[0];
+
+        if (!lockArea.IsAvailable)
+            return;
+
+        var customer = GetFirstCustomer(SecondLinePoint);
+        if (customer == null)
+            return;
+
+        RemoveCustomerInQueue(SecondLinePoint, customer);
+
+        if (!lockArea.ReserveCustomer(customer))
         {
-            var game = GameManager.Instance;
-
-            if (que.Count > 0 && game.areaOpenBool.TryGetValue("Floor_Lock", out bool open))
-            {
-                if (!open) return;
-
-                var lockArea = game.LockAreas[0];
-
-                // LockArea가 예약 가능 상태가 아니면 대기
-                if (!lockArea.IsAvailable)
-                    return;
-
-                var c = GetFirstCustomer(secondLine);
-                if (c == null) return;
-
-                // 큐에서 제거
-                RemoveCustomerInQueue(secondLine, c);
-
-                // 예약 시도
-                if (!lockArea.ReserveCustomer(c))
-                {
-                    // 예약에 실패하면 다시 큐에 넣고 정렬
-                    Enqueue(secondLine, c);
-                    return;
-                }
-
-                // 예약 성공 → waitPoint로 이동
-                c.SetCustomerDestination(lockArea.waitPoint);
-                // SetEatingCustomer는 이제 필요 없음 (ReserveCustomer에서 eatingCustomer 설정)
-            }
+            Enqueue(SecondLinePoint, customer);
+            return;
         }
+
+        customer.SetCustomerDestination(lockArea.waitPoint);
     }
 
-    public void Enqueue(Vector3 lineStart, Customer c, Vector3? lookAt = null)
+    public void Enqueue(Transform p_Point, Customer p_Customer, Vector3? p_LookAt = null)
     {
-        if (!lineQuDic.ContainsKey(lineStart))
+        if (p_Point == null || p_Customer == null)
+            return;
+
+        if (m_LineQueues.TryGetValue(p_Point, out Queue<Customer> lineQueue))
         {
-            if (canWait.ContainsKey(lineStart))
-            {
-                canWait[lineStart] = c.gameObject;
-            }
-            c.SetCustomerDestination(lineStart, lookAt);
-        }
-        else
-        {
-            var lineQueue = lineQuDic[lineStart];
-            lineQueue.Enqueue(c);
+            lineQueue.Enqueue(p_Customer);
             UpdateQueuePositions();
+            return;
         }
+
+        if (m_CanWait.ContainsKey(p_Point))
+            m_CanWait[p_Point] = p_Customer.gameObject;
+
+        p_Customer.SetCustomerDestination(p_Point.position, p_LookAt);
     }
 
-    public void RemoveCustomerInQueue(Vector3 lineStart, Customer c)
+    public void RemoveCustomerInQueue(Transform p_Point, Customer p_Customer)
     {
+        if (p_Point == null || p_Customer == null)
+            return;
+
+        if (!m_LineQueues.TryGetValue(p_Point, out Queue<Customer> oldQueue))
+            return;
+
         Queue<Customer> newQueue = new Queue<Customer>();
-        foreach (var cust in lineQuDic[lineStart])
+        foreach (var cust in oldQueue)
         {
-            if (cust != c)
+            if (cust != p_Customer)
                 newQueue.Enqueue(cust);
         }
-        lineQuDic[lineStart] = newQueue;
 
+        m_LineQueues[p_Point] = newQueue;
         UpdateQueuePositions();
     }
 
-    public void RemoveFromAllLines(Customer customer)
+    public void RemoveFromAllLines(Customer p_Customer)
     {
-        var keys = lineQuDic.Keys.ToList();
+        if (p_Customer == null)
+            return;
+
+        var keys = m_LineQueues.Keys.ToList();
 
         foreach (var key in keys)
         {
-            Queue<Customer> oldQueue = lineQuDic[key];
-            if (oldQueue.Count == 0) continue;
+            Queue<Customer> oldQueue = m_LineQueues[key];
+            if (oldQueue.Count == 0)
+                continue;
 
             Queue<Customer> newQueue = new Queue<Customer>();
             foreach (var c in oldQueue)
             {
-                if (c != customer && c != null)
+                if (c != null && c != p_Customer)
                     newQueue.Enqueue(c);
             }
 
-            lineQuDic[key] = newQueue;
+            m_LineQueues[key] = newQueue;
         }
 
         UpdateQueuePositions();
     }
 
-    public Customer GetFirstCustomer(Vector3 lineStart)
+    public Customer GetFirstCustomer(Transform p_Point)
     {
-        if (lineQuDic[lineStart].Count > 0)
-            return lineQuDic[lineStart].Peek();
+        if (p_Point == null)
+            return null;
 
-        return null;
+        if (!m_LineQueues.TryGetValue(p_Point, out Queue<Customer> queue))
+            return null;
+
+        return queue.Count > 0 ? queue.Peek() : null;
     }
 
     private void UpdateQueuePositions()
     {
         Vector3 backward = Vector3.left;
 
-        foreach (var kvp in lineQuDic)
+        foreach (var kvp in m_LineQueues)
         {
-            Vector3 basePos = kvp.Key;
+            Vector3 basePos = kvp.Key.position;
             int i = 0;
+
             foreach (var c in kvp.Value)
             {
-                if (c == null || !c.gameObject.activeInHierarchy) continue;
+                if (c == null || !c.gameObject.activeInHierarchy)
+                    continue;
 
                 Vector3 pos = basePos + backward * (i * 1.5f);
 
                 Vector3? lookAt = null;
-
-                if (kvp.Key == firstLine || kvp.Key == secondLine)
-                {
+                if (kvp.Key == FirstLinePoint || kvp.Key == SecondLinePoint)
                     lookAt = pos + Vector3.right;
-                }
 
                 c.SetCustomerDestination(pos, lookAt);
                 i++;
@@ -158,9 +208,9 @@ public class CustomerLineManager : Singleton<CustomerLineManager>
         }
     }
 
-    public Vector3? GetKeyByValue(Dictionary<Vector3, GameObject> dict, GameObject value)
+    public Transform GetKeyByValue(Dictionary<Transform, GameObject> p_Dict, GameObject p_Value)
     {
-        var pair = dict.FirstOrDefault(x => x.Value == value);
-        return pair.Equals(default(KeyValuePair<Vector3, GameObject>)) ? (Vector3?)null : pair.Key;
+        var pair = p_Dict.FirstOrDefault(x => x.Value == p_Value);
+        return pair.Equals(default(KeyValuePair<Transform, GameObject>)) ? null : pair.Key;
     }
 }
