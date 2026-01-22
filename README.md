@@ -13,6 +13,7 @@
 - 원작 게임: My Sweet Bakery!
 - 플랫폼: [GooglePlay](https://play.google.com/store/apps/details?id=io.supercent.caketopia&hl=ko)
 - 개발사: [Supercent](https://corp.supercent.io/)
+- 데모 영상: [Youtube](https://youtu.be/4_3xwiCrpeE)
 
 이 프로젝트는 위 원작 게임의  
 - 전반적인 게임 흐름(손님 방문 → 전시 → 판매)  
